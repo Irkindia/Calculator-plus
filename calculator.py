@@ -3,67 +3,96 @@ from tkinter import ttk, messagebox
 import json
 import os
 import sys
+import traceback
+from decimal import Decimal, getcontext
+
+# Import localization system
+try:
+    from lang import en, ru
+    HAS_LANGS = True
+except ImportError:
+    HAS_LANGS = False
+
+def show_error_dialog(message):
+    """Show error dialog with details"""
+    root = tk.Tk()
+    root.withdraw()
+    messagebox.showerror("Calculator Error", message)
+    root.destroy()
+
+try:
+    import requests
+    from packaging import version
+    HAS_DEPENDENCIES = True
+except ImportError as e:
+    print(f"❌ Missing dependencies: {e}")
+    HAS_DEPENDENCIES = False
 
 class AdvancedCalculator:
     def __init__(self):
-        self.window = tk.Tk()
-        self.window.title("Advanced Calculator")
-        self.window.geometry("450x600")  # Increased height for new row
-        self.window.minsize(400, 550)
-        
-        # Hide console (Windows only)
-        if os.name == 'nt':
-            try:
-                import ctypes
-                ctypes.windll.user32.ShowWindow(ctypes.windll.kernel32.GetConsoleWindow(), 0)
-            except:
-                pass
-        
+        try:
+            self.window = tk.Tk()
+            self.window.title("Calculator Plus v1.1.0")
+            self.window.geometry("450x600")
+            self.window.minsize(400, 550)
+            
+            # Hide console window on Windows
+            if os.name == 'nt':
+                try:
+                    import ctypes
+                    ctypes.windll.user32.ShowWindow(ctypes.windll.kernel32.GetConsoleWindow(), 0)
+                except:
+                    pass
+            
+            # Check for updates only if dependencies are available
+            if HAS_DEPENDENCIES:
+                update_info = self.check_updates()
+                if update_info:
+                    messagebox.showinfo("Update Available", update_info)
+            
+            self.setup_calculator()
+            
+        except Exception as e:
+            error_msg = f"Failed to initialize calculator:\n{str(e)}\n\nTraceback:\n{traceback.format_exc()}"
+            print(error_msg)
+            show_error_dialog(error_msg)
+            sys.exit(1)
+    
+    def check_updates(self):
+        """Check for updates from GitHub"""
+        try:
+            GITHUB_URL = "https://api.github.com/repos/Irkindia/calculator-plus/releases/latest"
+            response = requests.get(GITHUB_URL, timeout=5)
+            if response.status_code == 200:
+                latest_release = response.json()
+                latest_version = latest_release['tag_name']
+                current_version = "v1.1.0"
+                
+                if version.parse(latest_version) > version.parse(current_version):
+                    return f"🎉 Update available {latest_version}!\n{latest_release['body']}\n\nDownload: https://github.com/Irkindia/calculator-plus"
+            return None
+        except:
+            return None
+    
+    def setup_calculator(self):
+        """Setup calculator components"""
         # Default settings
         self.settings = {
-            "language": "russian",
-            "theme": "dark",
-            "precision": 10
+            "language": "russian", 
+            "theme": "dark"
         }
         
-        # Load settings
+        # Load settings from file
         self.load_settings()
         
-        # Localizations
-        self.languages = {
-            "russian": {
-                "title": "Продвинутый калькулятор",
-                "power_prompt": "ⁿ (введите степень)",
-                "operations": ["C", "⌫", "±", "%", "7", "8", "9", "/", "4", "5", "6", "*", 
-                             "1", "2", "3", "-", "xⁿ", "0", ".", "+", "="],
-                "settings_title": "Настройки",
-                "language_label": "Язык:",
-                "theme_label": "Тема:",
-                "precision_label": "Цифры после точки:",
-                "save_btn": "Сохранить",
-                "error_division": "Деление на ноль!",
-                "error_input": "Некорректный ввод!"
-            },
-            "english": {
-                "title": "Advanced Calculator",
-                "power_prompt": "ⁿ (enter power)",
-                "operations": ["C", "⌫", "±", "%", "7", "8", "9", "/", "4", "5", "6", "*", 
-                             "1", "2", "3", "-", "xⁿ", "0", ".", "+", "="],
-                "settings_title": "Settings",
-                "language_label": "Language:",
-                "theme_label": "Theme:",
-                "precision_label": "Digits after point:",
-                "save_btn": "Save",
-                "error_division": "Division by zero!",
-                "error_input": "Invalid input!"
-            }
-        }
+        # Setup localization
+        self.setup_localization()
         
-        # Themes
+        # Themes configuration
         self.themes = {
             "dark": {
                 "bg": "#2C2C2C",
-                "display_bg": "#1A1A1A",
+                "display_bg": "#1A1A1A", 
                 "display_fg": "white",
                 "label_fg": "#888888",
                 "numbers_bg": "#404040",
@@ -99,32 +128,112 @@ class AdvancedCalculator:
             }
         }
         
-        self.current_lang = self.languages[self.settings["language"]]
         self.current_theme = self.themes[self.settings["theme"]]
         
-        # Calculator variables
+        # Calculator state variables
         self.current_input = ""
         self.previous_input = ""
         self.operation = None
         self.power_mode = False
         self.power_base = None
         self.power_count = ""
-        self.new_input = True  # Flag for new input
+        self.new_input = True
         
         self.setup_ui()
+    
+    def setup_localization(self):
+        """Setup localization system"""
+        if not HAS_LANGS:
+            # Minimal fallback translations
+            self.languages = {
+                "english": {
+                    "title": "Calculator Plus",
+                    "power_prompt": "ⁿ (enter power)",
+                    "settings_title": "Settings",
+                    "language_label": "Language:",
+                    "theme_label": "Theme:",
+                    "save_btn": "Save",
+                    "error_division": "Division by zero!",
+                    "error_input": "Invalid input!"
+                },
+                "russian": {
+                    "title": "Калькулятор Плюс",
+                    "power_prompt": "ⁿ (введите степень)",
+                    "settings_title": "Настройки",
+                    "language_label": "Язык:",
+                    "theme_label": "Тема:",
+                    "save_btn": "Сохранить",
+                    "error_division": "Деление на ноль!",
+                    "error_input": "Некорректный ввод!"
+                }
+            }
+        else:
+            # Use external language files
+            self.languages = {
+                "english": en.translations,
+                "russian": ru.translations
+            }
+        
+        self.current_lang = self.languages[self.settings["language"]]
+    
+    def get_text(self, key):
+        """Get localized text by key"""
+        return self.current_lang.get(key, key)
+    
+    def get_localized_themes(self):
+        """Get theme names in current language"""
+        if HAS_LANGS:
+            return [
+                self.get_text("theme_dark"),
+                self.get_text("theme_light"), 
+                self.get_text("theme_blue")
+            ]
+        else:
+            return ["Dark", "Light", "Blue"]
+    
+    def get_localized_languages(self):
+        """Get language names - each in its native form"""
+        return ["Русский", "English"]
+    
+    def get_theme_key(self, localized_name):
+        """Convert localized theme name back to key"""
+        if HAS_LANGS:
+            themes_map = {
+                self.get_text("theme_dark"): "dark",
+                self.get_text("theme_light"): "light", 
+                self.get_text("theme_blue"): "blue"
+            }
+        else:
+            themes_map = {"Dark": "dark", "Light": "light", "Blue": "blue"}
+        return themes_map.get(localized_name, "dark")
+    
+    def get_language_key(self, localized_name):
+        """Convert native language name back to key"""
+        langs_map = {
+            "Русский": "russian",
+            "English": "english"
+        }
+        return langs_map.get(localized_name, "russian")
+    
+    def get_current_language_display(self):
+        """Get current language in its native form"""
+        if self.settings["language"] == "russian":
+            return "Русский"
+        else:
+            return "English"
         
     def load_settings(self):
-        """Load settings from file"""
+        """Load settings from JSON file"""
         try:
             if os.path.exists("calculator_settings.json"):
                 with open("calculator_settings.json", "r", encoding="utf-8") as f:
                     loaded_settings = json.load(f)
                     self.settings.update(loaded_settings)
         except:
-            pass  # Use default settings
+            pass
     
     def save_settings(self):
-        """Save settings to file"""
+        """Save settings to JSON file"""
         try:
             with open("calculator_settings.json", "w", encoding="utf-8") as f:
                 json.dump(self.settings, f, ensure_ascii=False, indent=2)
@@ -132,31 +241,31 @@ class AdvancedCalculator:
             pass
     
     def setup_ui(self):
-        """Create interface"""
+        """Initialize user interface"""
         self.window.configure(bg=self.current_theme["bg"])
-        self.window.title(self.current_lang["title"])
+        self.window.title(self.get_text("title"))
         
         self.create_display()
         self.create_buttons()
         self.create_settings_button()
         
     def create_display(self):
-        """Create input field"""
-        # Main display
+        """Create calculator display area"""
+        # Main display entry
         self.display = tk.Entry(self.window, font=('Arial', 24), 
                                justify='right', bd=10, relief='flat',
                                bg=self.current_theme["display_bg"], 
                                fg=self.current_theme["display_fg"])
         self.display.grid(row=0, column=0, columnspan=4, sticky='we', padx=10, pady=10)
         
-        # Operation label
+        # Operation display label
         self.operation_label = tk.Label(self.window, font=('Arial', 12), 
                                        bg=self.current_theme["bg"], 
                                        fg=self.current_theme["label_fg"])
         self.operation_label.grid(row=1, column=0, columnspan=4, sticky='w', padx=15)
         
     def create_settings_button(self):
-        """Settings button in top-left corner"""
+        """Create settings button in top-left corner"""
         settings_btn = tk.Button(self.window, text="⚙", font=('Arial', 14),
                                 bg=self.current_theme["special_bg"],
                                 fg=self.current_theme["special_fg"],
@@ -165,14 +274,14 @@ class AdvancedCalculator:
         settings_btn.grid(row=0, column=0, sticky='nw', padx=5, pady=5)
     
     def create_buttons(self):
-        """Create calculator buttons"""
+        """Create calculator buttons grid"""
         buttons = [
-            ['C', '⌫', '±', '%'],    # Percent button is back!
-            ['7', '8', '9', '/'],
-            ['4', '5', '6', '*'],
+            [self.get_text("btn_clear"), self.get_text("btn_backspace"), self.get_text("btn_plus_minus"), self.get_text("btn_percent")],
+            ['7', '8', '9', '÷'],  # Changed / to ÷
+            ['4', '5', '6', '×'],  # Changed * to ×
             ['1', '2', '3', '-'],
-            ['xⁿ', '0', '.', '+'],
-            ['', '', '', '=']        # Equal button on separate row
+            [self.get_text("btn_power"), '0', self.get_text("btn_decimal"), '+'],
+            ['', '', '', self.get_text("btn_equals")]
         ]
         
         for row, row_buttons in enumerate(buttons):
@@ -180,25 +289,26 @@ class AdvancedCalculator:
                 if text:  # Skip empty buttons
                     btn = self.create_button(text, row, col)
         
-        # Make equal button span 4 columns and be larger
-        equal_btn = tk.Button(self.window, text="=", font=('Arial', 18),
+        # Create large equal button
+        equal_btn = tk.Button(self.window, text=self.get_text("btn_equals"), font=('Arial', 18),
                              bg=self.current_theme["operations_bg"],
                              fg=self.current_theme["operations_fg"], bd=0, relief='flat',
                              command=lambda: self.button_click('='))
         equal_btn.grid(row=7, column=0, columnspan=4, sticky='news', padx=2, pady=2)
         
-        # Responsive sizing
+        # Configure grid responsiveness
         for i in range(4):
             self.window.grid_columnconfigure(i, weight=1)
-        for i in range(2, 8):  # Increased row range
+        for i in range(2, 8):
             self.window.grid_rowconfigure(i, weight=1)
     
     def create_button(self, text, row, col):
-        """Create single button"""
+        """Create individual calculator button"""
+        # Determine button color scheme
         if text in ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '.']:
             bg = self.current_theme["numbers_bg"]
             fg = self.current_theme["numbers_fg"]
-        elif text in ['/', '*', '-', '+', '=', 'xⁿ']:
+        elif text in ['÷', '×', '-', '+', '=', 'xⁿ']:  # Added ÷ and ×
             bg = self.current_theme["operations_bg"]
             fg = self.current_theme["operations_fg"]
         else:
@@ -214,8 +324,8 @@ class AdvancedCalculator:
     def open_settings(self):
         """Settings window"""
         settings_window = tk.Toplevel(self.window)
-        settings_window.title(self.current_lang["settings_title"])
-        settings_window.geometry("300x250")
+        settings_window.title(self.get_text("settings_title"))
+        settings_window.geometry("300x220")  # Increased height for version
         settings_window.configure(bg=self.current_theme["bg"])
         settings_window.resizable(False, False)
         
@@ -224,42 +334,39 @@ class AdvancedCalculator:
         settings_window.grab_set()
         
         # Language
-        tk.Label(settings_window, text=self.current_lang["language_label"],
+        tk.Label(settings_window, text=self.get_text("language_label"),
                 bg=self.current_theme["bg"], fg=self.current_theme["display_fg"]).pack(pady=5)
-        lang_var = tk.StringVar(value=self.settings["language"])
+        lang_var = tk.StringVar(value=self.get_current_language_display())
         lang_combo = ttk.Combobox(settings_window, textvariable=lang_var,
-                                 values=["russian", "english"], state="readonly")
+                                 values=self.get_localized_languages(), state="readonly")
         lang_combo.pack(pady=5)
         
         # Theme
-        tk.Label(settings_window, text=self.current_lang["theme_label"],
+        tk.Label(settings_window, text=self.get_text("theme_label"),
                 bg=self.current_theme["bg"], fg=self.current_theme["display_fg"]).pack(pady=5)
-        theme_var = tk.StringVar(value=self.settings["theme"])
+        theme_var = tk.StringVar(value=self.get_localized_themes()[["dark", "light", "blue"].index(self.settings["theme"])])
         theme_combo = ttk.Combobox(settings_window, textvariable=theme_var,
-                                  values=["dark", "light", "blue"], state="readonly")
+                                  values=self.get_localized_themes(), state="readonly")
         theme_combo.pack(pady=5)
-        
-        # Digits after point
-        tk.Label(settings_window, text=self.current_lang["precision_label"],
-                bg=self.current_theme["bg"], fg=self.current_theme["display_fg"]).pack(pady=5)
-        precision_var = tk.StringVar(value=str(self.settings["precision"]))
-        precision_combo = ttk.Combobox(settings_window, textvariable=precision_var,
-                                      values=["2", "5", "10", "15"], state="readonly")
-        precision_combo.pack(pady=5)
         
         def save_and_close():
             self.settings.update({
-                "language": lang_var.get(),
-                "theme": theme_var.get(),
-                "precision": int(precision_var.get())
+                "language": self.get_language_key(lang_var.get()),
+                "theme": self.get_theme_key(theme_var.get())
             })
             self.save_settings()
             settings_window.destroy()
             self.apply_settings()
         
-        tk.Button(settings_window, text=self.current_lang["save_btn"],
+        tk.Button(settings_window, text=self.get_text("save_btn"),
                  command=save_and_close, bg=self.current_theme["operations_bg"],
-                 fg="white", font=('Arial', 12)).pack(pady=20)
+                 fg="white", font=('Arial', 12)).pack(pady=10)
+        
+        # Version info in bottom-right corner
+        version_label = tk.Label(settings_window, text="v1.1.0", 
+                                bg=self.current_theme["bg"], fg=self.current_theme["label_fg"],
+                                font=('Arial', 8))
+        version_label.pack(side='right', padx=5, pady=5)
     
     def apply_settings(self):
         """Apply new settings"""
@@ -276,21 +383,21 @@ class AdvancedCalculator:
         """Handle button clicks"""
         if text in '0123456789':
             self.input_number(text)
-        elif text in ['+', '-', '*', '/']:
+        elif text in ['÷', '×', '-', '+']:  # Added ÷ and ×
             self.input_operation(text)
         elif text == '=':
             self.calculate()
-        elif text == 'C':
+        elif text == self.get_text("btn_clear"):
             self.clear()
-        elif text == '⌫':  # Backspace button
+        elif text == self.get_text("btn_backspace"):
             self.backspace()
-        elif text == '±':
+        elif text == self.get_text("btn_plus_minus"):
             self.plus_minus()
-        elif text == '%':  # Percentage button - now it's back!
+        elif text == self.get_text("btn_percent"):
             self.percentage()
-        elif text == 'xⁿ':
+        elif text == self.get_text("btn_power"):
             self.power_function()
-        elif text == '.':
+        elif text == self.get_text("btn_decimal"):
             self.input_decimal()
     
     def backspace(self):
@@ -325,7 +432,7 @@ class AdvancedCalculator:
             self.power_mode = True
             self.power_base = float(self.current_input)
             self.power_count = ""
-            self.operation_label.config(text=f"{self.current_input}{self.current_lang['power_prompt']}")
+            self.operation_label.config(text=f"{self.current_input}{self.get_text('power_prompt')}")
             self.current_input = ""
             self.new_input = True
             self.update_display()
@@ -346,11 +453,9 @@ class AdvancedCalculator:
                     operation_text += f" = {result}"
                     self.operation_label.config(text=operation_text)
                     
-                    # Round result according to settings
-                    result_str = str(round(result, self.settings["precision"]))
-                    # Remove trailing zeros after point
-                    if '.' in result_str:
-                        result_str = result_str.rstrip('0').rstrip('.')
+                    # Use Decimal for precise formatting
+                    result_str = f"{result:.10f}"
+                    result_str = result_str.rstrip('0').rstrip('.')
                     
                     self.current_input = result_str
                     self.update_display()
@@ -361,18 +466,28 @@ class AdvancedCalculator:
                 self.new_input = True
                 
             except ValueError:
-                self.show_error(self.current_lang["error_input"])
+                self.show_error(self.get_text("error_input"))
     
     def calculate(self):
-        """Main calculations"""
+        """Main calculations with decimal precision"""
         if self.power_mode and self.power_count:
             self.calculate_power()
             return
             
         if self.previous_input and self.current_input and self.operation:
             try:
-                prev = float(self.previous_input)
-                curr = float(self.current_input)
+                # Use Decimal for precise calculations
+                getcontext().prec = 20
+                
+                # Convert operation symbol for calculation
+                operation = self.operation
+                if operation == '÷':
+                    operation = '/'
+                elif operation == '×':
+                    operation = '*'
+                
+                prev = Decimal(self.previous_input)
+                curr = Decimal(self.current_input)
                 
                 operations = {
                     '+': prev + curr,
@@ -381,17 +496,26 @@ class AdvancedCalculator:
                     '/': prev / curr if curr != 0 else None
                 }
                 
-                if self.operation == '/' and curr == 0:
-                    self.show_error(self.current_lang["error_division"])
+                if operation == '/' and curr == 0:
+                    self.show_error(self.get_text("error_division"))
                     return
                 
-                result = operations[self.operation]
+                result = operations[operation]
                 
-                # Round and remove trailing zeros
-                result_str = str(round(result, self.settings["precision"]))
-                if '.' in result_str:
-                    result_str = result_str.rstrip('0').rstrip('.')
+                # Convert to string and format nicely
+                result_str = f"{float(result):.10f}"  # Show up to 10 decimal places
                 
+                # Remove trailing zeros and unnecessary decimal point
+                result_str = result_str.rstrip('0').rstrip('.')
+                
+                # Handle edge cases
+                if result_str == '':
+                    result_str = '0'
+                elif result_str.startswith('.'):
+                    result_str = '0' + result_str
+                elif result_str.endswith('.'):
+                    result_str = result_str[:-1]
+                    
                 self.current_input = result_str
                 self.previous_input = ""
                 self.operation = None
@@ -400,7 +524,7 @@ class AdvancedCalculator:
                 self.operation_label.config(text="")
                 
             except ValueError:
-                self.show_error(self.current_lang["error_input"])
+                self.show_error(self.get_text("error_input"))
         elif self.operation and not self.current_input:
             # If "=" pressed without second number, use previous result
             self.current_input = self.previous_input
@@ -435,11 +559,14 @@ class AdvancedCalculator:
             try:
                 value = float(self.current_input) / 100
                 # Remove trailing zeros
-                value_str = str(value).rstrip('0').rstrip('.') if '.' in str(value) else str(value)
+                value_str = f"{value:.10f}"
+                value_str = value_str.rstrip('0').rstrip('.')
+                if value_str == '':
+                    value_str = '0'
                 self.current_input = value_str
                 self.update_display()
             except ValueError:
-                self.show_error(self.current_lang["error_input"])
+                self.show_error(self.get_text("error_input"))
     
     def input_decimal(self):
         """Input decimal point"""
@@ -477,7 +604,15 @@ class AdvancedCalculator:
         """Run application"""
         self.window.mainloop()
 
-# Launch
+def main():
+    """Main entry point with error handling"""
+    try:
+        calculator = AdvancedCalculator()
+        calculator.run()
+    except Exception as e:
+        error_msg = f"Fatal error:\n{str(e)}\n\n{traceback.format_exc()}"
+        print(error_msg)
+        show_error_dialog(error_msg)
+
 if __name__ == "__main__":
-    calc = AdvancedCalculator()
-    calc.run()
+    main()
